@@ -4,6 +4,11 @@ pipeline:
   projectIdentifier: express_harness_ci
   orgIdentifier: default
   tags: {}
+  properties:
+    ci:
+      codebase:
+        connectorRef: github_repo_connector
+        build: <+input>
   stages:
     - stage:
         name: Build Test and Push
