@@ -635,14 +635,43 @@ pipeline:
 
 ## 8. Execution, Verification & Troubleshooting
 
-### 8.1 How to Trigger the Pipeline
-1. In Harness CI, click **Run** (top right corner).
-2. Select your Git branch (e.g., `main` or `master`).
-3. Click **Run Pipeline**.
-4. Alternatively, configure a **Git Trigger**:
-   - Go to **Pipelines** > `express-ci-pipeline` > **Triggers** tab > **+ Add Trigger**.
-   - Connector: `github-repo-connector`.
-   - Event: `Push` on branch `main`.
+### 8.1 How to Automatically Trigger the Pipeline on Every Push to `master`
+
+To have Harness automatically execute the pipeline whenever code is pushed to `master`:
+
+#### Method A: Harness UI Trigger Configuration
+1. Open your pipeline `express-ci-pipeline` in Harness.
+2. In the top navigation bar of the Pipeline editor, click the **Triggers** tab.
+3. Click **+ Add Trigger** > Select **GitHub** (or your Git provider).
+4. Configure Trigger details:
+   - **Name:** `Trigger on Master Push`
+   - **Connector:** Select `github-repo-connector`
+   - **Event:** `Push`
+5. Under **Conditions**:
+   - Attribute: `Branch Name`
+   - Operator: `Equals`
+   - Value: `master`
+6. Under **Pipeline Input**:
+   - Branch: `<+trigger.branch>`
+7. Click **Create Trigger**.
+
+> [!TIP]
+> If your GitHub Personal Access Token (PAT) used in `github-repo-connector` has `admin:repo_hook` or `repo` permissions, Harness will **automatically register the webhook in GitHub** for you!
+
+#### Method B: Manual GitHub Webhook Registration (if Harness cannot auto-create)
+If using manual Webhooks:
+1. In Harness, open the created Trigger and copy the generated **Webhook URL** and **Secret**.
+2. Go to your GitHub repository > **Settings** > **Webhooks** > **Add webhook**.
+3. Set:
+   - **Payload URL:** Paste the Harness Webhook URL
+   - **Content type:** `application/json`
+   - **Secret:** Paste the Harness Webhook Secret
+   - **Which events would you like to trigger this webhook?:** Select **Just the push event**
+   - **Active:** Checked
+4. Click **Add webhook**.
+
+#### Method C: Git Sync / In-Repo Trigger Definition
+You can also use the declarative trigger definition committed directly in your repository at `.harness/triggers/trigger-master-push.yaml`. Harness Git Sync will automatically detect and manage this trigger.
 
 ---
 

@@ -1,0 +1,35 @@
+trigger:
+  name: Trigger on Master Push
+  identifier: trigger_master_push
+  enabled: true
+  description: Triggers Harness CI pipeline on every git push to the master branch
+  tags: {}
+  orgIdentifier: default
+  projectIdentifier: express_harness_ci
+  pipelineIdentifier: express_ci_pipeline
+  source:
+    type: Webhook
+    spec:
+      type: Github
+      spec:
+        type: Push
+        spec:
+          connectorRef: github_repo_connector
+          autoAbortPreviousExecutions: false
+          payloadConditions:
+            - key: targetBranch
+              operator: Equals
+              value: master
+          headerConditions: []
+          repoName: express-harness-demo
+          actions: []
+  inputYaml: |
+    pipeline:
+      identifier: express_ci_pipeline
+      properties:
+        ci:
+          codebase:
+            build:
+              type: branch
+              spec:
+                branch: <+trigger.branch>
