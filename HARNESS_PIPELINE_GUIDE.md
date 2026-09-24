@@ -491,12 +491,12 @@ pipeline:
         type: CI
         spec:
           cloneCodebase: true
-          infrastructure:
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
             type: Cloud
-            spec:
-              type: Linux
-              size: M
-              arch: Amd64
+            spec: {}
           execution:
             steps:
               - step:
@@ -520,7 +520,7 @@ pipeline:
                   spec:
                     connectorRef: aws_ecr_connector
                     region: us-east-1
-                    account: "<AWS_ACCOUNT_ID>"
+                    account: "123806350293"
                     imageName: express-harness-demo
                     tags:
                       - "<+pipeline.sequenceId>"
