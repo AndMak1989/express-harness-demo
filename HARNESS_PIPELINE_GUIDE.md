@@ -578,23 +578,13 @@ After the pipeline completes with green status:
 
 1. **Verify Unit & Integration Tests in Harness:**
    - Click the `Run Tests` step in the execution view.
-   - Inspect the logs to confirm all test suites in `src/tests/items.test.js` passed with 100% success.
-   - Confirm coverage table displays line and branch coverage.
+   - Confirm all test suites in `src/tests/items.test.js` passed with 100% success (11 passed).
 
-2. **Verify Sonar Quality Gate:**
-   - Log into SonarCloud or SonarQube.
-   - Open project `express-harness-demo`.
-   - Confirm:
-     - 0 Bugs, 0 Vulnerabilities, 0 Security Hotspots.
-     - Code Coverage > 80%.
-     - Quality Gate status: **Passed**.
+2. **Verify GitHub CodeQL Security Scan (Public Repo):**
+   - Open your GitHub repository > **Security** tab > **Code scanning**.
+   - Confirm the CodeQL workflow ran and reported 0 security vulnerabilities or alerts.
 
-3. **Verify Black Duck SCA Bill of Materials:**
-   - Open your Synopsys Black Duck dashboard.
-   - Navigate to **Projects** > `express-harness-demo` > Version `1.0.<build_number>`.
-   - Verify the Bill of Materials (BOM) contains identified components (`express`, `sqlite3`, etc.) with zero critical policy violations.
-
-4. **Verify Image in Amazon ECR:**
+3. **Verify Container Image in Amazon ECR:**
    - Open AWS Management Console > **Amazon ECR** > **Repositories** > `express-harness-demo`.
    - Confirm two new image tags appear:
      - Tag: `<pipeline.sequenceId>` (e.g., `1`, `2`)
