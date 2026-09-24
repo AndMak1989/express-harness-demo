@@ -4,7 +4,7 @@ const itemsRouter = require('./routes/items');
 const app = express();
 
 app.use(express.json());
-
+console.log("hello");
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.status(200).json({ 
