@@ -6,9 +6,9 @@ pipeline:
   tags: {}
   stages:
     - stage:
-        name: Build Test and Security
-        identifier: Build_Test_and_Security
-        description: Runs Jest tests with LCOV coverage, Sonar scan, Black Duck SCA, and pushes Docker image to Amazon ECR
+        name: Build Test and Push
+        identifier: Build_Test_and_Push
+        description: Runs Jest tests and pushes Docker image to Amazon ECR
         type: CI
         spec:
           cloneCodebase: true
@@ -22,7 +22,7 @@ pipeline:
             steps:
               - step:
                   type: Run
-                  name: Run Tests and Generate Coverage
+                  name: Run Tests
                   identifier: Run_Tests
                   spec:
                     connectorRef: account.harnessImage
@@ -31,56 +31,8 @@ pipeline:
                     command: |-
                       echo "Installing dependencies..."
                       npm ci
-                      echo "Running Jest test suite with coverage..."
+                      echo "Running Jest test suite..."
                       npm test
-                    reports:
-                      type: JUnit
-                      spec:
-                        paths:
-                          - "coverage/lcov.info"
-
-              - step:
-                  type: Run
-                  name: SonarQube / SonarCloud Code Analysis
-                  identifier: Sonar_Scan
-                  spec:
-                    connectorRef: account.harnessImage
-                    image: sonarsource/sonar-scanner-cli:latest
-                    shell: Sh
-                    envVariables:
-                      SONAR_TOKEN: <+secrets.getValue("sonar_token")>
-                      SONAR_HOST_URL: https://sonarcloud.io
-                    command: |-
-                      sonar-scanner \
-                        -Dsonar.token="$SONAR_TOKEN" \
-                        -Dsonar.host.url="$SONAR_HOST_URL" \
-                        -Dsonar.projectKey=express-harness-demo \
-                        -Dsonar.sources=src \
-                        -Dsonar.tests=src/tests \
-                        -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
-
-              - step:
-                  type: Run
-                  name: Synopsys Black Duck SCA Scan
-                  identifier: Black_Duck_Scan
-                  spec:
-                    connectorRef: account.harnessImage
-                    image: openjdk:17-slim
-                    shell: Bash
-                    envVariables:
-                      BLACKDUCK_URL: <+secrets.getValue("blackduck_url")>
-                      BLACKDUCK_API_TOKEN: <+secrets.getValue("blackduck_token")>
-                    command: |-
-                      apt-get update && apt-get install -y curl bash
-                      bash <(curl -s -L https://detect.synopsys.com/detect9.sh) \
-                        --blackduck.url="$BLACKDUCK_URL" \
-                        --blackduck.api.token="$BLACKDUCK_API_TOKEN" \
-                        --detect.project.name="express-harness-demo" \
-                        --detect.project.version.name="1.0.<+pipeline.sequenceId>" \
-                        --detect.tools=DETECTOR \
-                        --detect.detector.search.depth=2 \
-                        --detect.npm.include.dev.dependencies=false \
-                        --blackduck.trust.cert=true
 
               - step:
                   type: BuildAndPushECR

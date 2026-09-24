@@ -18,45 +18,37 @@ A practical, production-ready, step-by-step blueprint to build a clean Express.j
 
 ## 1. Architecture & Workflow Overview
 
-This setup implements a robust Continuous Integration (CI) pipeline in **Harness.io** without requiring local Docker execution. Every change pushed to the repository triggers automated testing, code quality analysis, software composition analysis (SCA), container build, and secure publication to **Amazon Elastic Container Registry (ECR)**.
+This setup implements a streamlined Continuous Integration (CI) pipeline in **Harness.io** without requiring local Docker execution. Every change pushed to the `master` repository triggers automated testing, container build, and secure publication to **Amazon Elastic Container Registry (ECR)**.
 
 ```mermaid
 flowchart TD
     subgraph Dev["Source Control (Git/GitHub)"]
-        Repo["Git Repository (master/main)"]
+        Repo["Git Repository (master)"]
         Code["Express.js + SQLite DB"]
         Tests["Jest & Supertest Suite"]
-        Config["Dockerfile & sonar-project.properties"]
+        Docker["Dockerfile"]
     end
 
     subgraph HarnessCI["Harness.io CI Pipeline (Build Stage)"]
         Clone["1. Clone Repository"]
-        TestStep["2. Run Tests & LCOV Coverage\n(node:20-alpine)"]
-        SonarStep["3. Sonar Quality Analysis\n(sonarsource/sonar-scanner-cli)"]
-        BDStep["4. Black Duck SCA Scan\n(Synopsys Detect CLI)"]
-        ECRStep["5. Build & Push Image\n(Harness ECR Step)"]
+        TestStep["2. Run Tests & Coverage\n(node:20-alpine)"]
+        ECRStep["3. Build & Push Image\n(Harness ECR Step)"]
 
         Clone --> TestStep
-        TestStep --> SonarStep
-        SonarStep --> BDStep
-        BDStep --> ECRStep
+        TestStep --> ECRStep
     end
 
-    subgraph CloudServices["External Cloud & Security Services"]
-        SonarCloud["SonarCloud / SonarQube\n(Bugs, Vulnerabilities, Coverage)"]
-        BlackDuckHub["Synopsys Black Duck Hub\n(License & Open Source CVEs)"]
+    subgraph CloudServices["AWS Cloud"]
         AWSECR["Amazon ECR\n(<aws_account_id>.dkr.ecr.<region>.amazonaws.com)"]
     end
 
-    SonarStep -. Reports Metrics .-> SonarCloud
-    BDStep -. Sends Dependency BOM .-> BlackDuckHub
     ECRStep -. Pushes Tagged Image .-> AWSECR
 ```
 
 ### Pipeline Key Metrics
 - **Zero Local Docker Dependency:** You can write and run tests locally via Node.js; Docker image building and registry push occur entirely inside Harness Cloud runners.
-- **Embedded Database:** SQLite is utilized so that unit and integration tests run self-contained in memory or local file without requiring database container orchestration in CI.
-- **Security & Quality Gates:** Code cannot reach Amazon ECR unless tests pass, code coverage meets quality criteria, and dependencies are vetted.
+- **Embedded Database:** SQLite runs self-contained in memory or local file without requiring database container orchestration in CI.
+- **Automated Delivery Gate:** Code cannot reach Amazon ECR unless tests pass.
 
 ---
 
@@ -400,12 +392,6 @@ Create the following 4 secrets:
 | :--- | :--- | :--- | :--- |
 | `AWS Access Key` | `aws_access_key` | `AKIA...` | AWS IAM Access Key ID |
 | `AWS Secret Key` | `aws_secret_key` | `wJalr...` | AWS IAM Secret Access Key |
-| `Sonar Token` | `sonar_token` | `sqp_...` | SonarQube/SonarCloud Token |
-| `Black Duck Token` | `blackduck_token` | `OGYx...` | Synopsys Black Duck API Token |
-
-*(Optional)* If using custom or on-prem URLs:
-- `sonar_host_url`: e.g., `https://sonarcloud.io` or `https://sonar.internal`
-- `blackduck_url`: e.g., `https://blackduck.internal.company.com`
 
 ---
 
@@ -446,67 +432,27 @@ Navigate to **Project Settings** > **Connectors** > **+ New Connector**.
 2. **Name:** `express-ci-pipeline`.
 3. Click **Start**.
 4. In the pipeline canvas, click **Add Stage** > Select **Build** stage.
-   - **Stage Name:** `Build Test and Security`
+   - **Stage Name:** `Build Test and Push`
    - **Clone Codebase:** Toggle **ON** and select `github-repo-connector`.
 5. Under **Infrastructure** tab:
    - Select **Cloud** (Harness Cloud hosted runners - Linux AMD64).
 6. Under **Execution** tab, add the steps in order:
 
-#### Step 1: Run Tests & Coverage
+#### Step 1: Run Tests
 - Click **Add Step** > **Run**.
 - **Name:** `Run Tests`
 - **Container Registry:** `Docker Hub` (or library)
 - **Image:** `node:20-alpine`
 - **Command:**
   ```bash
+  echo "Installing dependencies..."
   npm ci
+  echo "Running Jest test suite..."
   npm test
   ```
-- **Report Paths:** Under **Optional Configuration** > **Report Paths**, add `coverage/lcov.info` to enable test intelligence.
 
-#### Step 2: Sonar Code Quality Scan
-- Click **Add Step** > **Run**.
-- **Name:** `Sonar Scan`
-- **Container Registry:** `Docker Hub`
-- **Image:** `sonarsource/sonar-scanner-cli:latest`
-- **Environment Variables:**
-  - `SONAR_TOKEN`: `<+secrets.getValue("sonar_token")>`
-  - `SONAR_HOST_URL`: `https://sonarcloud.io` (or your SonarQube URL)
-- **Command:**
-  ```bash
-  sonar-scanner \
-    -Dsonar.token="$SONAR_TOKEN" \
-    -Dsonar.host.url="$SONAR_HOST_URL" \
-    -Dsonar.projectKey=express-harness-demo \
-    -Dsonar.sources=src \
-    -Dsonar.tests=src/tests \
-    -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
-  ```
-
-#### Step 3: Synopsys Black Duck SCA Scan
-- Click **Add Step** > **Run**.
-- **Name:** `Black Duck Scan`
-- **Container Registry:** `Docker Hub`
-- **Image:** `openjdk:17-slim` (Synopsys Detect requires Java 11+)
-- **Environment Variables:**
-  - `BLACKDUCK_URL`: `<+secrets.getValue("blackduck_url")>`
-  - `BLACKDUCK_API_TOKEN`: `<+secrets.getValue("blackduck_token")>`
-- **Command:**
-  ```bash
-  apt-get update && apt-get install -y curl bash
-  bash <(curl -s -L https://detect.synopsys.com/detect9.sh) \
-    --blackduck.url="$BLACKDUCK_URL" \
-    --blackduck.api.token="$BLACKDUCK_API_TOKEN" \
-    --detect.project.name="express-harness-demo" \
-    --detect.project.version.name="1.0.<+pipeline.sequenceId>" \
-    --detect.tools=DETECTOR \
-    --detect.detector.search.depth=2 \
-    --detect.npm.include.dev.dependencies=false \
-    --blackduck.trust.cert=true
-  ```
-
-#### Step 4: Build and Push to AWS ECR
-- Click **Add Step** > Search for **Build and Push to ECR** (or **Build and Push an image to Docker Registry**).
+#### Step 2: Build and Push to AWS ECR
+- Click **Add Step** > Search for **Build and Push to ECR**.
 - **Name:** `Push to ECR`
 - **Docker Connector:** `aws-ecr-registry` (or select AWS Connector)
 - **Region:** `us-east-1` (your ECR region)
@@ -539,9 +485,9 @@ pipeline:
   tags: {}
   stages:
     - stage:
-        name: Build Test and Security
-        identifier: Build_Test_and_Security
-        description: Runs Jest tests, Sonar scan, Black Duck SCA, and pushes to AWS ECR
+        name: Build Test and Push
+        identifier: Build_Test_and_Push
+        description: Runs Jest tests and pushes Docker image to Amazon ECR
         type: CI
         spec:
           cloneCodebase: true
@@ -555,7 +501,7 @@ pipeline:
             steps:
               - step:
                   type: Run
-                  name: Run Tests and Generate Coverage
+                  name: Run Tests
                   identifier: Run_Tests
                   spec:
                     connectorRef: account.harnessImage
@@ -564,56 +510,8 @@ pipeline:
                     command: |-
                       echo "Installing dependencies..."
                       npm ci
-                      echo "Running test suite with LCOV coverage..."
+                      echo "Running Jest test suite..."
                       npm test
-                    reports:
-                      type: JUnit
-                      spec:
-                        paths:
-                          - "coverage/lcov.info"
-
-              - step:
-                  type: Run
-                  name: SonarQube / SonarCloud Code Analysis
-                  identifier: Sonar_Scan
-                  spec:
-                    connectorRef: account.harnessImage
-                    image: sonarsource/sonar-scanner-cli:latest
-                    shell: Sh
-                    envVariables:
-                      SONAR_TOKEN: <+secrets.getValue("sonar_token")>
-                      SONAR_HOST_URL: https://sonarcloud.io
-                    command: |-
-                      sonar-scanner \
-                        -Dsonar.token="$SONAR_TOKEN" \
-                        -Dsonar.host.url="$SONAR_HOST_URL" \
-                        -Dsonar.projectKey=express-harness-demo \
-                        -Dsonar.sources=src \
-                        -Dsonar.tests=src/tests \
-                        -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
-
-              - step:
-                  type: Run
-                  name: Synopsys Black Duck SCA Scan
-                  identifier: Black_Duck_Scan
-                  spec:
-                    connectorRef: account.harnessImage
-                    image: openjdk:17-slim
-                    shell: Bash
-                    envVariables:
-                      BLACKDUCK_URL: <+secrets.getValue("blackduck_url")>
-                      BLACKDUCK_API_TOKEN: <+secrets.getValue("blackduck_token")>
-                    command: |-
-                      apt-get update && apt-get install -y curl bash
-                      bash <(curl -s -L https://detect.synopsys.com/detect9.sh) \
-                        --blackduck.url="$BLACKDUCK_URL" \
-                        --blackduck.api.token="$BLACKDUCK_API_TOKEN" \
-                        --detect.project.name="express-harness-demo" \
-                        --detect.project.version.name="1.0.<+pipeline.sequenceId>" \
-                        --detect.tools=DETECTOR \
-                        --detect.detector.search.depth=2 \
-                        --detect.npm.include.dev.dependencies=false \
-                        --blackduck.trust.cert=true
 
               - step:
                   type: BuildAndPushECR
